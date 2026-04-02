@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 Konstantin <hi@iamkonstantin.eu>.
+ * Copyright 2026 Konstantin <hi@iamkonstantin.eu>.
  *  Use of this source code is governed by the BSD 3-Clause License that can be found in LICENSE file.
  */
 
@@ -23,13 +23,13 @@ group = "eu.iamkonstantin.kotlin"
 version = "0.0.603"
 
 kotlin {
-    jvm()
-    androidTarget {
-        publishLibraryVariants("release")
-        @OptIn(ExperimentalKotlinGradlePluginApi::class)
+    jvm {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_11)
         }
+    }
+    androidTarget {
+        publishLibraryVariants("release")
     }
     iosX64()
     iosArm64()
