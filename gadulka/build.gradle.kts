@@ -72,6 +72,12 @@ kotlin {
             }
         }
 
+        val jvmTest by getting {
+            dependencies {
+                implementation(libs.kotlin.test)
+            }
+        }
+
         val wasmJsMain by getting {
             dependencies {
                 implementation(libs.kotlinx.browser)
