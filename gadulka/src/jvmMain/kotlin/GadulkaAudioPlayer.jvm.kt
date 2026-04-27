@@ -45,14 +45,15 @@ actual class GadulkaPlayer actual constructor() {
     actual fun play(url: String) {
         release()
         Platform.runLater {
-            val uriScheme = runCatching { URI(url).scheme }.getOrElse { "unparseable" }
+            val resolved = materialiseToLocalUrl(url)
+            val uriScheme = runCatching { URI(resolved).scheme }.getOrElse { "unparseable" }
             println("Gadulka JVM: play() scheme=$uriScheme")
             if (uriScheme == "file") {
-                val exists = runCatching { java.io.File(URI(url)).exists() }.getOrElse { false }
+                val exists = runCatching { java.io.File(URI(resolved)).exists() }.getOrElse { false }
                 println("Gadulka JVM: file exists=$exists")
             }
             try {
-                val media = Media(URI(url).toString()).apply {
+                val media = Media(URI(resolved).toString()).apply {
                     setOnError {
                         val diag = this.error?.let { buildDiagnostic(it) } ?: "Media.onError, no detail"
                         println("Gadulka JVM: Media.onError: $diag")
