@@ -8,9 +8,27 @@ package eu.iamkonstantin.kotlin.gadulka
 import javafx.application.Platform
 import javafx.embed.swing.JFXPanel
 import javafx.scene.media.Media
+import javafx.scene.media.MediaException
 import javafx.scene.media.MediaPlayer
 import javafx.util.Duration
 import java.net.URI
+
+private fun buildDiagnostic(throwable: Throwable): String = buildString {
+    var cursor: Throwable? = throwable
+    var depth = 0
+    while (cursor != null) {
+        if (depth == 0) {
+            if (cursor is MediaException) {
+                appendLine("MediaException type: ${cursor.type}")
+            }
+            appendLine("Error: ${cursor.message}")
+        } else {
+            appendLine("  caused by [${cursor::class.simpleName}]: ${cursor.message}")
+        }
+        cursor = cursor.cause
+        depth++
+    }
+}
 
 @Suppress("EXPECT_ACTUAL_CLASSIFIERS_ARE_IN_BETA_WARNING")
 actual class GadulkaPlayer actual constructor() {
@@ -27,8 +45,19 @@ actual class GadulkaPlayer actual constructor() {
     actual fun play(url: String) {
         release()
         Platform.runLater {
+            val uriScheme = runCatching { URI(url).scheme }.getOrElse { "unparseable" }
+            println("Gadulka JVM: play() scheme=$uriScheme")
+            if (uriScheme == "file") {
+                val exists = runCatching { java.io.File(URI(url)).exists() }.getOrElse { false }
+                println("Gadulka JVM: file exists=$exists")
+            }
             try {
-                val media = Media(URI(url).toString())
+                val media = Media(URI(url).toString()).apply {
+                    setOnError {
+                        val diag = this.error?.let { buildDiagnostic(it) } ?: "Media.onError, no detail"
+                        println("Gadulka JVM: Media.onError: $diag")
+                    }
+                }
                 playerState = MediaPlayer(media).apply {
                     setOnReady {
                         println("Gadulka JVM: Player is ready")
@@ -44,14 +73,15 @@ actual class GadulkaPlayer actual constructor() {
                         }
                     }
                     setOnError {
-                        errorListener?.onError(this.error?.message)
-                        println("Gadulka JVM: Error occurred: ${this.error?.message}")
+                        val diag = this.error?.let { buildDiagnostic(it) } ?: "unknown error"
+                        println("Gadulka JVM: $diag")
+                        errorListener?.onError(diag)
                     }
                 }
             } catch (e: Exception) {
-                errorListener?.onError(e.message)
-                println("Gadulka JVM: Failed to play audio.")
-                e.printStackTrace()
+                val diag = buildDiagnostic(e)
+                println("Gadulka JVM: Failed to play audio.\n$diag")
+                errorListener?.onError(diag)
             }
         }
     }
