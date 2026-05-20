@@ -25,6 +25,7 @@ actual class GadulkaPlayer actual constructor() {
     private var controllerFuture: ListenableFuture<MediaController>
     private var mediaController: MediaController? = null
     private var errorListener: ErrorListener? = null
+    private var mediaControlListener: MediaControlListener? = null
 
     init {
         val context = ContextProvider.getContext()
@@ -154,6 +155,11 @@ actual class GadulkaPlayer actual constructor() {
         errorListener = listener
     }
 
+    actual fun setOnMediaControlListener(listener: MediaControlListener) {
+        mediaControlListener = listener
+        GadulkaPlaybackService.mediaControlListener = listener
+    }
+
     private fun setupListener() {
         mediaController?.addListener(object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
@@ -161,5 +167,6 @@ actual class GadulkaPlayer actual constructor() {
                 super.onPlayerError(error)
             }
         })
+
     }
 }

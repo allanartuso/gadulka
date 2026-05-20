@@ -133,6 +133,17 @@ expect class GadulkaPlayer() {
     fun seekTo(time: Long)
 
     fun setOnErrorListener(listener: ErrorListener)
+
+    /**
+     * Sets a listener for media control events such as "next" and "previous" actions
+     * triggered from system media controls (notification, lock screen, headset buttons).
+     *
+     * On Android, this enables previous/next buttons in the media notification.
+     * On other platforms, this is currently a no-op.
+     *
+     * @param listener The [MediaControlListener] to receive next/previous events.
+     */
+    fun setOnMediaControlListener(listener: MediaControlListener)
 }
 
 

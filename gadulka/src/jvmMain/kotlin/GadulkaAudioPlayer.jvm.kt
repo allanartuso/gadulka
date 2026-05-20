@@ -170,4 +170,9 @@ actual class GadulkaPlayer actual constructor() {
     actual fun setOnErrorListener(listener: ErrorListener) {
         errorListener = listener
     }
+
+    actual fun setOnMediaControlListener(listener: MediaControlListener) {
+        // No-op on JVM: media control events are not yet supported on this platform.
+    }
 }
+
