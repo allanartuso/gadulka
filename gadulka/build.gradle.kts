@@ -87,6 +87,7 @@ kotlin {
         val androidMain by getting {
             dependencies {
                 implementation(libs.androix.media3.exploplayer)
+                implementation(libs.androidx.media3.session)
                 implementation(libs.androidcontextprovider)
             }
         }
