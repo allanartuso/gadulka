@@ -11,6 +11,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.unit.dp
 import eu.iamkonstantin.kotlin.gadulka.GadulkaPlayerState
 import eu.iamkonstantin.kotlin.gadulka.rememberGadulkaLiveState
+import eu.iamkonstantin.kotlin.gadulka.MediaControlListener
 import org.jetbrains.compose.ui.tooling.preview.Preview
 
 
@@ -18,16 +19,58 @@ import org.jetbrains.compose.ui.tooling.preview.Preview
 @Preview
 fun App() {
     MaterialTheme {
+        val url = remember {
+            mutableStateOf("https://download.samplelib.com/wav/sample-12s.wav")
+        }
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-            AudioPlayer()
+            AudioPlayer(audioUrl = url.value, 
+            onFinished = {
+                url.value = "https://samplelib.com/mp3/sample-6s.mp3"
+            },
+             onPrevious = {
+                url.value = "https://download.samplelib.com/wav/sample-12s.wav"
+            },
+            
+            )
         }
     }
 }
 
 @Composable
-fun AudioPlayer() {
+fun AudioPlayer(
+    audioUrl: String,
+    onFinished: () -> Unit,
+    onPrevious: () -> Unit,
+) {
     val gadulka = rememberGadulkaLiveState()
-    val url = remember { mutableStateOf("https://download.samplelib.com/wav/sample-12s.wav") }
+
+    gadulka.player.setOnMediaControlListener(object : MediaControlListener {
+        override fun onNext() {
+            onFinished()
+            // No action needed here since we're already tracking state with LaunchedEffect
+        }
+
+        override fun onPrevious() {
+            onPrevious()
+        }
+    })
+
+    LaunchedEffect(audioUrl) {
+            gadulka.player.play(audioUrl)
+    }
+
+    LaunchedEffect(gadulka.state.name, gadulka.position) {
+        val marginOfErrorMs = 600
+
+        if (gadulka.state.name != "PLAYING" &&
+            gadulka.duration > 0 &&
+            (gadulka.duration - gadulka.position) <= marginOfErrorMs
+        ) {
+            onFinished()
+        }
+
+
+    }
 
     Column(
         modifier = Modifier.padding(16.dp),
@@ -50,10 +93,6 @@ fun AudioPlayer() {
         }
 
         Row {
-            TextField(value = url.value, onValueChange = { url.value = it })
-        }
-
-        Row {
             Button(
                 onClick = {
                     if (gadulka.state == GadulkaPlayerState.PAUSED) {
@@ -62,7 +101,7 @@ fun AudioPlayer() {
                     } else {
                         // play something new
                         gadulka.player.play(
-                            url.value
+                            audioUrl
                         )
                     }
                 }) {
@@ -72,7 +111,8 @@ fun AudioPlayer() {
                 onClick = {
                     gadulka.player.pause()
                 },
-                enabled = gadulka.state == GadulkaPlayerState.PLAYING) {
+                enabled = gadulka.state == GadulkaPlayerState.PLAYING
+            ) {
                 Text("Pause")
             }
             Button(
