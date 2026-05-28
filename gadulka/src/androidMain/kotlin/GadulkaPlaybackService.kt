@@ -6,6 +6,9 @@
 package eu.iamkonstantin.kotlin.gadulka
 
 import android.content.Intent
+import android.media.AudioFocusRequest
+import android.media.AudioManager
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import androidx.annotation.OptIn
@@ -37,10 +40,48 @@ class GadulkaPlaybackService : MediaSessionService() {
     }
 
     private var mediaSession: MediaSession? = null
+    private var audioManager: AudioManager? = null
+    private var audioFocusRequest: AudioFocusRequest? = null
+    private var wasPlayingBeforeFocusLoss = false
+    private var hasAudioFocus = false
+
+    private val audioFocusListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
+        when (focusChange) {
+            AudioManager.AUDIOFOCUS_GAIN -> {
+                // Focus regained — resume if we were playing before
+                hasAudioFocus = true
+                if (wasPlayingBeforeFocusLoss) {
+                    mediaSession?.player?.play()
+                    wasPlayingBeforeFocusLoss = false
+                }
+            }
+            AudioManager.AUDIOFOCUS_LOSS,
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
+                // Focus lost — pause and remember we were playing
+                hasAudioFocus = false
+                val player = mediaSession?.player
+                if (player?.isPlaying == true) {
+                    wasPlayingBeforeFocusLoss = true
+                    player.pause()
+                }
+            }
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+                // We could duck, but for music it's better to pause
+                hasAudioFocus = false
+                val player = mediaSession?.player
+                if (player?.isPlaying == true) {
+                    wasPlayingBeforeFocusLoss = true
+                    player.pause()
+                }
+            }
+        }
+    }
 
     @OptIn(UnstableApi::class)
     override fun onCreate() {
         super.onCreate()
+
+        audioManager = getSystemService(AUDIO_SERVICE) as AudioManager
 
         val audioAttributes = AudioAttributes.Builder()
             .setUsage(C.USAGE_MEDIA)
@@ -48,9 +89,18 @@ class GadulkaPlaybackService : MediaSessionService() {
             .build()
 
         val exoPlayer = ExoPlayer.Builder(this)
-            .setAudioAttributes(audioAttributes, /* handleAudioFocus= */ true)
+            .setAudioAttributes(audioAttributes, /* handleAudioFocus= */ false)
             .setHandleAudioBecomingNoisy(true)
             .build()
+
+        // Request audio focus when playback starts, abandon when it stops
+        exoPlayer.addListener(object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (isPlaying) {
+                    requestAudioFocus()
+                }
+            }
+        })
 
         // Wrap the player to intercept next/previous commands and forward them
         // to the app-level MediaControlListener instead of default ExoPlayer behavior.
@@ -119,11 +169,50 @@ class GadulkaPlaybackService : MediaSessionService() {
 
     @OptIn(UnstableApi::class)
     override fun onDestroy() {
+        abandonAudioFocus()
         mediaSession?.run {
             player.release()
             release()
         }
         mediaSession = null
         super.onDestroy()
+    }
+
+    private fun requestAudioFocus() {
+        if (hasAudioFocus) return
+        val am = audioManager ?: return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                .setAudioAttributes(
+                    android.media.AudioAttributes.Builder()
+                        .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .build()
+                )
+                .setOnAudioFocusChangeListener(audioFocusListener, Handler(Looper.getMainLooper()))
+                .build()
+            audioFocusRequest = request
+            val result = am.requestAudioFocus(request)
+            hasAudioFocus = (result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED)
+        } else {
+            @Suppress("DEPRECATION")
+            val result = am.requestAudioFocus(
+                audioFocusListener,
+                android.media.AudioManager.STREAM_MUSIC,
+                AudioManager.AUDIOFOCUS_GAIN
+            )
+            hasAudioFocus = (result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED)
+        }
+    }
+
+    private fun abandonAudioFocus() {
+        val am = audioManager ?: return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            audioFocusRequest?.let { am.abandonAudioFocusRequest(it) }
+        } else {
+            @Suppress("DEPRECATION")
+            am.abandonAudioFocus(audioFocusListener)
+        }
+        hasAudioFocus = false
     }
 }
